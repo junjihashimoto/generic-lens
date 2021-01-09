@@ -14,7 +14,8 @@ import Control.Lens
 import Control.Monad (void)
 import Data.Generics.Product
 import GHC.Generics
-import Test.HUnit
+import Test.HUnit hiding (State)
+import Control.Monad.State
 
 main :: IO ()
 main = void $ runTestTT tests
@@ -25,6 +26,37 @@ data Tree a w = Leaf a
               | WithWeight (Tree a w) w
        deriving (Show, Generic, Eq)
 
+type Parameter = Int
+
+data A = A {
+  a_p0 :: Parameter,
+  a_p1 :: B
+} deriving (Show, Generic, Eq)
+
+data B = B {
+  b_p0 :: Parameter
+} deriving (Show, Generic, Eq)
+
+pop :: forall s. State [s] s
+pop = do
+  params <- get
+  case params of
+    [] -> error "Not enough parameters supplied to replaceParameters"
+    (p : t) -> do put t; return p
+
+update :: forall a s. HasTypes s a => s -> State [a] s
+update s = (types @a) (\_ -> pop) s
+  
+replaceAll :: forall a s. HasTypes s a => s -> [a] -> s
+replaceAll f params =
+  let (f', remaining) = runState (update f) params
+   in if null remaining
+        then f'
+        else error "Some parameters in a call to replaceParameters haven't been consumed!"
+
+a :: A
+a = A 3 (B 4)
+
 -- A typical tree
 mytree :: Tree Int Int
 mytree = Fork (WithWeight (Leaf 42) 1)
@@ -33,6 +65,8 @@ mytree = Fork (WithWeight (Leaf 42) 1)
 mytreeShown :: Tree String Int
 mytreeShown = Fork (WithWeight (Leaf "42") 1)
                 (WithWeight (Fork (Leaf "88") (Leaf "37")) 2)
+
+
 
 -- A polymorphic-recursive structure
 data Poly a b
@@ -64,6 +98,8 @@ tests = TestList
   , toListOf (types @Int) (poly & param @0 %~ length) ~=? [10, 5, 20, 5]
   -- map length over the Strings, then collect all the resulting Ints
   , toListOf (param @0) (poly & param @0 %~ length)       ~=? [5,5]
+  , toListOf (types @Int) a ~=? [3,4]
+  , toListOf (types @Int) (replaceAll @Int a [5,6]) ~=? [5,6]
   ]
 
 -- original code from SYB:

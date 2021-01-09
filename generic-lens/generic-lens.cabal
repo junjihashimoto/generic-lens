@@ -92,6 +92,7 @@ test-suite generic-lens-syb-tree
                     , lens
                     , profunctors
                     , HUnit
+                    , mtl
 
   default-language:   Haskell2010
   ghc-options:        -Wall
